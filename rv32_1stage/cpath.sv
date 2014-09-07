@@ -2,54 +2,44 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+
 module decode (
   // system signals
-  input  logic                  clk,      // clock
-  input  logic                  rst,      // reset
-  // MemPortIo imem
-  // MemPortIo dmem
-  // DatToCtlIo
-  // CtlToDatIo
-  output logic                  ctl__stall    ,
-  output logic          [3-1:0] ctl__pc_sel   ,
-  output logic          [2-1:0] ctl__op1_sel  ,
-  output logic          [2-1:0] ctl__op2_sel  ,
-  output logic          [4-1:0] ctl__alu_fun  ,
-  output logic          [3-1:0] ctl__wb_sel   ,
-  output logic                  ctl__rf_wen   ,
-  output logic          [2-1:0] ctl__csr_cmd  ,
-  output logic                  ctl__exception,
-  output logic          [6-1:0] ctl__exc_cause,
-  output logic                  ctl__sret     ,
-  output logic                  ctl__debug_dmem_val,
-  output logic                  ctl__debug_dmem_typ = Bits(OUTPUT, MT_X.getWidth),
+  input  logic clk,  // clock
+  input  logic rst,  // reset
+  // interfaces
+  MemPortIo imem,
+  MemPortIo dmem,
+  DatToCtlIo dat,
+  CtlToDatIo ctl,
   // ?
-  input  logic                  resetSignal
+  input  logic resetSignal
 );
 
 import instructions::*;
 import constanst::*;
 
+// Put these control signals into variables
 struct packed {
-  t_bool err;  // unknown instruction error
-  t_br   br ;  // branch type
-  t_op1  op1;  // RS1 Operand Select Signal
-  t_op2  op2;  // RS2 Operand Select Signal
-  t_alu  alu;  // ALU Operation Signal
-  t_wb   wb ;  // Writeback Select Signal
-  t_ren  ren;  // Register File Write Enable Signal
-  t_men  men;  // Memory Enable Signal
-  t_m    m  ;  // Memory load/store (read/write)
-  t_mt   mt ;  // Memory Op Constants
-  t_csr  cst;  // control status register access
-  t_bool sret;
-  t_bool syscall;
-  t_bool sbreak;
-  t_bool privileged;
+  t_bool cs_val_inst;  // unknown instruction error
+  t_br   cs_br_type ;  // branch type
+  t_op1  cs_op1_sel ;  // RS1 Operand Select Signal
+  t_op2  cs_op2_sel ;  // RS2 Operand Select Signal
+  t_alu  cs_alu_fun ;  // ALU Operation Signal
+  t_wb   cs_wb_sel  ;  // Writeback Select Signal
+  t_ren  cs_rf_wen  ;  // Register File Write Enable Signal
+  t_men  cs_mem_en  ;  // Memory Enable Signal
+  t_m    cs_mem_fcn ;  // Memory load/store (read/write)
+  t_mt   cs_msk_sel ;  // Memory Op Constants
+  t_csr  cs_csr_cmd ;  // control status register access
+  t_bool cs_sret    ;
+  t_bool cs_syscall ;
+  t_bool cs_sbreak  ;
+  t_bool cs_privileged;
 } decode;
 
 always_comb begin
-case (dat__inst)
+case (dat.inst)
 //                                                                                                          | is sret
 //                                                                                                          |  | is syscall
 //                    val  |  BR   | op1    |  op2    |   ALU    |  wb   | rf   | mem  | mem  | mask |  csr |  |  | is sbreak
@@ -115,83 +105,146 @@ endcase
 end
 
 logic stall;
-assign stall = !imem__resp.valid || !((cs_mem_en && dmem__resp.valid) || !cs_mem_en) || resetSignal;
+assign stall = !imem__resp.valid || !((decode.cs_mem_en && dmem__resp.valid) || !decode.cs_mem_en) || resetSignal;
 
 assign ctl__stall   = stall;
 assign ctl__pc_sel  = ctrl_pc_sel;
-assign ctl__op1_sel = cs_op1_sel;
-assign ctl__op2_sel = cs_op2_sel;
-assign ctl__alu_fun = cs_alu_fun;
-assign ctl__wb_sel  = cs_wb_sel;
-assign ctl__rf_wen  = stall ? 1'b0 : cs_rf_wen);
-assign ctl__csr_cmd = stall ? CSR_N : cs_csr_cmd);
+assign ctl__op1_sel = decode.cs_op1_sel;
+assign ctl__op2_sel = decode.cs_op2_sel;
+assign ctl__alu_fun = decode.cs_alu_fun;
+assign ctl__wb_sel  = decode.cs_wb_sel;
+assign ctl__rf_wen  = stall ? 1'b0  : decode.cs_rf_wen );
+assign ctl__csr_cmd = stall ? CSR_N : decode.cs_csr_cmd);
    
 // Memory Requests
 assign imem__req__valid     = 1'b1;
 assign imem__req__bits__fcn = M_XRD;
 assign imem__req__bits__typ = MT_WU;
 
-assign dmem__req__valid     = cs_mem_en;
-assign dmem__req__bits__fcn = cs_mem_fcn;
-assign dmem__req__bits__typ = cs_msk_sel;
+assign dmem__req__valid     = decode.cs_mem_en;
+assign dmem__req__bits__fcn = decode.cs_mem_fcn;
+assign dmem__req__bits__typ = decode.cs_msk_sel;
 
 // Exception Handling ---------------------
 
 logic exc_illegal;   
-assign exc_illegal = (!cs_val_inst && imem__resp__valid) 
+assign exc_illegal = (!decode.cs_val_inst && imem__resp__valid) 
 
 // check for interrupts 
 // an interrupt must be both pending (ip) and enabled on the interrupt mask (im)
-logic exc_interrupts;
+logic exc_interrupts [];
 logic exc_interrupt_unmasked, exc_interrupt_cause;
 logic exc_interrupt;
-assign exc_interrupts = (0 until io.dat.status.ip.getWidth).map(i => (io.dat.status.im(i) && io.dat.status.ip(i), UInt(BigInt(1) << (conf.xprlen-1) | i)))
+assign exc_interrupts = dat__status.im & dat__status.ip;
+//assign exc_interrupts = (0 until dat__status.ip.getWidth).map(i => (dat__status.im(i) && io.dat.status.ip(i), UInt(BigInt(1) << (conf.xprlen-1) | i)))
 assign {exc_interrupt_unmasked, exc_interrupt_cause} = checkExceptions(exc_interrupts);
-assign exc_interrupt = io.dat.status.ei && exc_interrupt_unmasked;
+assign exc_interrupt = dat__status.ei && exc_interrupt_unmasked;
 
    def checkExceptions(x: Seq[(Bool, UInt)]) =
       (x.map(_._1).reduce(_||_), PriorityMux(x))
      
-   // check for illegal CSR instructions or CSR access violations
-   val fp_csrs        = Common.CSRs.fcsr :: Common.CSRs.frm :: Common.CSRs.fflags :: Nil
-   val legal_csrs     = Common.CSRs.all32.toSet -- fp_csrs
-   val rs1_addr       = io.dat.inst(RS1_MSB,RS1_LSB)
-   val csr_addr       = io.dat.inst(CSR_ADDR_MSB, CSR_ADDR_LSB)
-   val csr_en         = cs_csr_cmd != CSR.N
-   val csr_wen        = rs1_addr != UInt(0) || !Vec(CSR.S, CSR.C).contains(cs_csr_cmd)
-   val exc_csr_privileged = csr_en &&
-                        (csr_addr(11,10) === UInt(3) && csr_wen ||
-                         csr_addr(11,10) === UInt(2) ||
-                         csr_addr(11,10) === UInt(1) && !io.dat.status.s ||
-                         csr_addr(9,8) >= UInt(2) ||
-                         csr_addr(9,8) === UInt(1) && !io.dat.status.s && csr_wen)
-   val csr_invalid    = csr_en && !Vec(legal_csrs.map(UInt(_))).contains(csr_addr)
+// check for illegal CSR instructions or CSR access violations
 
+logic  [5-1:0] rs1_addr;
+logic [12-1:0] csr_addr;
+logic csr_en;
+logic csr_wen;
+logic exc_csr_privileged;
+logic csr_invalid;
 logic exc_privileged;
-assign exc_privileged = exc_csr_privileged || (cs_privileged && !(dat__status.s));
-   
-assign ctl__sret      = cs_sret;
 
-assign ctl__exception = cs_syscall       ||
-                        cs_sbreak        ||
-                        exc_illegal      ||
-                        csr_invalid      ||
-                        exc_privileged   ||
+assign rs1_addr = dat__inst[RS1_MSB:RS1_LSB];
+assign csr_addr = dat__inst[CSR_ADDR_MSB:CSR_ADDR_LSB];
+
+assign csr_en         =                decode.cs_csr_cmd != CSR_N
+assign csr_wen        = |rs1_addr || !(decode.cs_csr_cmd == CSR_S ||
+                                       decode.cs_csr_cmd == CSR_C );
+assign exc_csr_privileged = csr_en &&
+                        (csr_addr[11,10] === 2'd3) &&                   csr_wen ||
+                         csr_addr[11,10] === 2'd2)                              ||
+                         csr_addr[11,10] === 2'd1) && !dat__status.s            ||
+                         csr_addr[ 9, 8] >=  2'd2)                              ||
+                         csr_addr[ 9, 8] === 2'd1) && !dat__status.s && csr_wen)
+
+always_comb begin
+  if (csr_en) begin
+    case ()
+//    csr_fflags   ,
+//    csr_frm      ,
+//    csr_fcsr     ,
+      csr_sup0     ,
+      csr_sup1     ,
+      csr_epc      ,
+      csr_badvaddr ,
+      csr_ptbr     ,
+      csr_asid     ,
+      csr_count    ,
+      csr_compare  ,
+      csr_evec     ,
+      csr_cause    ,
+      csr_status   ,
+      csr_hartid   ,
+      csr_impl     ,
+      csr_fatc     ,
+      csr_send_ipi ,
+      csr_clear_ipi,
+      csr_stats    ,
+      csr_reset    ,
+      csr_tohost   ,
+      csr_fromhost ,
+      csr_cycle    ,
+      csr_time     ,
+      csr_instret  ,
+      csr_uarch0   ,
+      csr_uarch1   ,
+      csr_uarch2   ,
+      csr_uarch3   ,
+      csr_uarch4   ,
+      csr_uarch5   ,
+      csr_uarch6   ,
+      csr_uarch7   ,
+      csr_uarch8   ,
+      csr_uarch9   ,
+      csr_uarch10  ,
+      csr_uarch11  ,
+      csr_uarch12  ,
+      csr_uarch13  ,
+      csr_uarch14  ,
+      csr_uarch15  ,
+      csr_counth   ,
+      csr_cycleh   ,
+      csr_timeh    ,
+      csr_instreth : csr_invalid = 1'b1;
+      default      : csr_invalid = 1'b1;
+    endcase
+  end else begin
+    csr_invalid = 1'b0;
+  end
+end
+
+assign exc_privileged = exc_csr_privileged || (decode.cs_privileged && !(dat__status.s));
+   
+assign ctl__sret      = decode.cs_sret;
+
+assign ctl__exception = decode.cs_syscall ||
+                        decode.cs_sbreak  ||
+                        exc_illegal       ||
+                        csr_invalid       ||
+                        exc_privileged    ||
                         exc_interrupt;
 
    // note: priority here is very important
-   io.ctl.exc_cause := Mux(exc_interrupt,              exc_interrupt_cause,
-                       Mux(exc_illegal || csr_invalid, UInt(Common.Causes.illegal_instruction),
-                       Mux(exc_privileged,             UInt(Common.Causes.privileged_instruction),
-                       Mux(cs_syscall,                 UInt(Common.Causes.syscall),
-                       Mux(cs_sbreak,                  UInt(Common.Causes.breakpoint),
-                                                       UInt(0,5))))))
+assign ctl__exc_cause = (exc_interrupt              ? exc_interrupt_cause          :
+                        (exc_illegal || csr_invalid ? cause_illegal_instruction    :
+                        (exc_privileged             ? cause_privileged_instruction :
+                        (decode.cs_syscall          ? cause_syscall                :
+                        (decode.cs_sbreak           ? cause_breakpoint             : 5'd0)))))
    
    
    // ----------------------------------------       
    
    // only here to thread ctrl signals to printf in dpath.scala                  
-assign ctl__debug_dmem_val = cs_mem_en;
-assign ctl__debug_dmem_typ = cs_msk_sel;
+assign ctl__debug_dmem_val = decode.cs_mem_en;
+assign ctl__debug_dmem_typ = decode.cs_msk_sel;
 
 endmodule: cpath

@@ -1,19 +1,3 @@
-package Sodor
-
-import Chisel._
-import Node._
-import Constants._
-import Common._
-import Common.Util._
-import ReferenceChipBackend._
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.HashMap
-
-
-object ReferenceChipBackend {
-  val initMap = new HashMap[Module, Bool]()
-}
-
 module top (
   // system signals
   input  logic clk,
@@ -23,7 +7,17 @@ module top (
   HTIFIO       htif
 )
 
-   implicit val sodor_conf = SodorConfiguration()
+HTIFIO host ();
+
+tile tile (
+  // system signals
+  .clk (clk),
+  .rst (rst),
+  // interfaces
+  .host (host)
+);
+
+
 
    val reset_signal = Reg(next=Reg(next=io.htif.reset))
    val tile = Module(new SodorTile)

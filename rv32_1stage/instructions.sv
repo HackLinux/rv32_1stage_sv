@@ -188,19 +188,19 @@ typedef enum logic [32-1:0] {
 } t_isa;
 
 typedef enum logic [4-1:0] {
-  val misaligned_fetch       = 4'h0,
-  val fault_fetch            = 4'h1,
-  val illegal_instruction    = 4'h2,
-  val privileged_instruction = 4'h3,
-  val fp_disabled            = 4'h4,
-  val syscall                = 4'h6,
-  val breakpoint             = 4'h7,
-  val misaligned_load        = 4'h8,
-  val misaligned_store       = 4'h9,
-  val fault_load             = 4'ha,
-  val fault_store            = 4'hb,
-  val accelerator_disabled   = 4'hc
-} t_causes;
+  cause_misaligned_fetch       = 4'h0,
+  cause_fault_fetch            = 4'h1,
+  cause_illegal_instruction    = 4'h2,
+  cause_privileged_instruction = 4'h3,
+  cause_fp_disabled            = 4'h4,
+  cause_syscall                = 4'h6,
+  cause_breakpoint             = 4'h7,
+  cause_misaligned_load        = 4'h8,
+  cause_misaligned_store       = 4'h9,
+  cause_fault_load             = 4'ha,
+  cause_fault_store            = 4'hb,
+  cause_accelerator_disabled   = 4'hc
+} t_cause;
 
 //object Causes {
 //  val all = {
@@ -222,109 +222,52 @@ typedef enum logic [4-1:0] {
 //}
 
 typedef enum logic [12-1:0] {
-  fflags    = 12'h001,
-  frm       = 12'h002,
-  fcsr      = 12'h003,
-  sup0      = 12'h500,
-  sup1      = 12'h501,
-  epc       = 12'h502,
-  badvaddr  = 12'h503,
-  ptbr      = 12'h504,
-  asid      = 12'h505,
-  count     = 12'h506,
-  compare   = 12'h507,
-  evec      = 12'h508,
-  cause     = 12'h509,
-  status    = 12'h50a,
-  hartid    = 12'h50b,
-  impl      = 12'h50c,
-  fatc      = 12'h50d,
-  send_ipi  = 12'h50e,
-  clear_ipi = 12'h50f,
-  stats     = 12'h51c,
-  reset     = 12'h51d,
-  tohost    = 12'h51e,
-  fromhost  = 12'h51f,
-  cycle     = 12'hc00,
-  time      = 12'hc01,
-  instret   = 12'hc02,
-  uarch0    = 12'hcc0,
-  uarch1    = 12'hcc1,
-  uarch2    = 12'hcc2,
-  uarch3    = 12'hcc3,
-  uarch4    = 12'hcc4,
-  uarch5    = 12'hcc5,
-  uarch6    = 12'hcc6,
-  uarch7    = 12'hcc7,
-  uarch8    = 12'hcc8,
-  uarch9    = 12'hcc9,
-  uarch10   = 12'hcca,
-  uarch11   = 12'hccb,
-  uarch12   = 12'hccc,
-  uarch13   = 12'hccd,
-  uarch14   = 12'hcce,
-  uarch15   = 12'hccf,
-  counth    = 12'h586,
-  cycleh    = 12'hc80,
-  timeh     = 12'hc81,
-  instreth  = 12'hc82
-} t_csrs;
-
-//object CSRs {
-//  val all = {
-//    val res = collection.mutable.ArrayBuffer[Int]()
-//    res += fflags
-//    res += frm
-//    res += fcsr
-//    res += sup0
-//    res += sup1
-//    res += epc
-//    res += badvaddr
-//    res += ptbr
-//    res += asid
-//    res += count
-//    res += compare
-//    res += evec
-//    res += cause
-//    res += status
-//    res += hartid
-//    res += impl
-//    res += fatc
-//    res += send_ipi
-//    res += clear_ipi
-//    res += stats
-//    res += reset
-//    res += tohost
-//    res += fromhost
-//    res += cycle
-//    res += time
-//    res += instret
-//    res += uarch0
-//    res += uarch1
-//    res += uarch2
-//    res += uarch3
-//    res += uarch4
-//    res += uarch5
-//    res += uarch6
-//    res += uarch7
-//    res += uarch8
-//    res += uarch9
-//    res += uarch10
-//    res += uarch11
-//    res += uarch12
-//    res += uarch13
-//    res += uarch14
-//    res += uarch15
-//    res.toArray
-//  }
-//  val all32 = {
-//    val res = collection.mutable.ArrayBuffer(all:_*)
-//    res += counth
-//    res += cycleh
-//    res += timeh
-//    res += instreth
-//    res.toArray
-//  }
-//}
+  csr_fflags    = 12'h001,
+  csr_frm       = 12'h002,
+  csr_fcsr      = 12'h003,
+  csr_sup0      = 12'h500,
+  csr_sup1      = 12'h501,
+  csr_epc       = 12'h502,
+  csr_badvaddr  = 12'h503,
+  csr_ptbr      = 12'h504,
+  csr_asid      = 12'h505,
+  csr_count     = 12'h506,
+  csr_compare   = 12'h507,
+  csr_evec      = 12'h508,
+  csr_cause     = 12'h509,
+  csr_status    = 12'h50a,
+  csr_hartid    = 12'h50b,
+  csr_impl      = 12'h50c,
+  csr_fatc      = 12'h50d,
+  csr_send_ipi  = 12'h50e,
+  csr_clear_ipi = 12'h50f,
+  csr_stats     = 12'h51c,
+  csr_reset     = 12'h51d,
+  csr_tohost    = 12'h51e,
+  csr_fromhost  = 12'h51f,
+  csr_cycle     = 12'hc00,
+  csr_time      = 12'hc01,
+  csr_instret   = 12'hc02,
+  csr_uarch0    = 12'hcc0,
+  csr_uarch1    = 12'hcc1,
+  csr_uarch2    = 12'hcc2,
+  csr_uarch3    = 12'hcc3,
+  csr_uarch4    = 12'hcc4,
+  csr_uarch5    = 12'hcc5,
+  csr_uarch6    = 12'hcc6,
+  csr_uarch7    = 12'hcc7,
+  csr_uarch8    = 12'hcc8,
+  csr_uarch9    = 12'hcc9,
+  csr_uarch10   = 12'hcca,
+  csr_uarch11   = 12'hccb,
+  csr_uarch12   = 12'hccc,
+  csr_uarch13   = 12'hccd,
+  csr_uarch14   = 12'hcce,
+  csr_uarch15   = 12'hccf,
+  csr_counth    = 12'h586,
+  csr_cycleh    = 12'hc80,
+  csr_timeh     = 12'hc81,
+  csr_instreth  = 12'hc82
+} t_csr;
 
 endpackage: instructions

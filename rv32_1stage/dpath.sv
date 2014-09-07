@@ -5,92 +5,80 @@
 // Christopher Celio
 // 2012 Jan 11
 
-interface DatToCtlIo ();
-  logic [32-1:0] inst   = Bits(OUTPUT, 32)
-  logic          br_eq  = Bool(OUTPUT)
-  logic          br_lt  = Bool(OUTPUT)
-  logic          br_ltu = Bool(OUTPUT)
-  logic status = new Status().asOutput()
-endinterface: DatToCtlIo
-
-class DpathIo(implicit conf: SodorConfiguration) extends Bundle() 
-{
-   val host = new HTIFIO()
-   val imem = new MemPortIo(conf.xprlen)
-   val dmem = new MemPortIo(conf.xprlen)
-   val ctl  = new CtlToDatIo().flip()
-   val dat  = new DatToCtlIo()
-}
-
 module dpath (
   // system signals
-  input  logic                  clk,      // clock
-  input  logic                  rst,      // reset
-   val host = new HTIFIO()
-   val imem = new MemPortIo(conf.xprlen)
-   val dmem = new MemPortIo(conf.xprlen)
-   val ctl  = new CtlToDatIo().flip()
-   val dat  = new DatToCtlIo()
-)
+  input  logic clk, // clock
+  input  logic rst, // reset
+  // interfaces
+  HTIFIO    host
+  MemPortIo imem,
+  MemPortIo dmem,
+  CtlToDatIo ctl,
+  DatToCtlIo dat
+);
 
 import Constants._
 import Common._
 import Common.Constants._
 
-   // Instruction Fetch
-integer pc_next         ;
-integer pc_plus4        ;
-integer br_target       ;
-integer jmp_target      ;
-integer jump_reg_target ;
-integer exception_target;
+// Instruction Fetch
+logic [32-1:0] pc_next         ;
+logic [32-1:0] pc_plus4        ;
+logic [32-1:0] br_target       ;
+logic [32-1:0] jmp_target      ;
+logic [32-1:0] jump_reg_target ;
+logic [32-1:0] exception_target;
  
-   // PC Register
-   val pc_reg = Reg(init=UInt(START_ADDR, conf.xprlen))
+// PC Register
+logic [32-1:0] pc_reg;
 
-   when (!io.ctl.stall) 
-   {
-      pc_reg := pc_next
-   }
+always_ff (posedge clk, posedge rst)
+if (rst)               pc_reg <= START_ADDR;
+else if (!ctl__stall)  pc_reg <= pc_next
 
-   pc_plus4 := (pc_reg + UInt(4, conf.xprlen))               
+assign pc_plus4 = pc_reg + 4;               
 
-   pc_next := MuxCase(pc_plus4, Array(
-                  (io.ctl.pc_sel === PC_4)   -> pc_plus4,
-                  (io.ctl.pc_sel === PC_BR)  -> br_target,
-                  (io.ctl.pc_sel === PC_J )  -> jmp_target,
-                  (io.ctl.pc_sel === PC_JR)  -> jump_reg_target,
-                  (io.ctl.pc_sel === PC_EXC) -> exception_target
-                  ))
+always_comb begin
+  case (io.ctl.pc_sel)
+    PC_4   : pc_next = pc_plus4;
+    PC_BR  : pc_next = br_target;
+    PC_J   : pc_next = jmp_target;
+    PC_JR  : pc_next = jump_reg_target;
+    PC_EXC : pc_next = exception_target;
+    default: pc_next = pc_plus4;
+end
    
    io.imem.req.bits.addr := pc_reg
    val inst = Mux(io.imem.resp.valid, io.imem.resp.bits.data, BUBBLE) 
                  
    
    // Decode
-   val rs1_addr = inst(RS1_MSB, RS1_LSB)
-   val rs2_addr = inst(RS2_MSB, RS2_LSB)
-   val wb_addr  = inst(RD_MSB,  RD_LSB)
+logic [5-1:0] rs1_addr;
+logic [5-1:0] rs2_addr;
+logic [5-1:0] wb_addr ;
+assign rs1_addr = inst[RS1_MSB:RS1_LSB];
+assign rs2_addr = inst[RS2_MSB:RS2_LSB];
+assign wb_addr  = inst[ RD_MSB: RD_LSB];
    
-   val wb_data = Bits(width = conf.xprlen)
+logic [32-1:0] wb_data;
  
-   // Register File
-   val regfile = Mem(Bits(width = conf.xprlen), 32)
+// Register File
+logic [32-1:0] regfile [0:32-1];
 
-   when (io.ctl.rf_wen && (wb_addr != UInt(0)))
-   {
-      regfile(wb_addr) := wb_data
-   }
+always_ff (posedge clk)
+if (ctl__rf_wen && |wb_addr)
+regfile[wb_addr] <= wb_data;
 
-   val rs1_data = Mux((rs1_addr != UInt(0)), regfile(rs1_addr), UInt(0, conf.xprlen))
-   val rs2_data = Mux((rs2_addr != UInt(0)), regfile(rs2_addr), UInt(0, conf.xprlen))
-   
+logic [32-1:0] rs1_data;
+logic [32-1:0] rs2_data;
+assign rs1_data = |rs1_addr ? regfile[rs1_addr] : 32'd0;
+assign rs2_data = |rs2_addr ? regfile[rs2_addr] : 32'd0;
    
    // immediates
-   val imm_i = inst(31, 20) 
+   val imm_i =     inst(31, 20) 
    val imm_s = Cat(inst(31, 25), inst(11,7))
    val imm_b = Cat(inst(31), inst(7), inst(30,25), inst(11,8))
-   val imm_u = inst(31, 12)
+   val imm_u =     inst(31, 12)
    val imm_j = Cat(inst(31), inst(19,12), inst(20), inst(30,21))
    val imm_z = Cat(Fill(UInt(0), 27), inst(19,15))
 
@@ -102,46 +90,54 @@ integer exception_target;
    val imm_j_sext = Cat(Fill(imm_j(19), 11), imm_j, UInt(0))
    
    
-   val alu_op1 = MuxCase(UInt(0), Array(
-               (io.ctl.op1_sel === OP1_RS1) -> rs1_data,
-               (io.ctl.op1_sel === OP1_IMU) -> imm_u_sext,
-               (io.ctl.op1_sel === OP1_IMZ) -> imm_z
-               )).toUInt
-   
-   val alu_op2 = MuxCase(UInt(0), Array(
-               (io.ctl.op2_sel === OP2_RS2) -> rs2_data,
-               (io.ctl.op2_sel === OP2_PC)  -> pc_reg,
-               (io.ctl.op2_sel === OP2_IMI) -> imm_i_sext,
-               (io.ctl.op2_sel === OP2_IMS) -> imm_s_sext
-               )).toUInt
- 
- 
+always_comb begin
+  case (io.ctl.op1_sel)
+    OP1_RS1: alu_op1 = rs1_data;
+    OP1_IMU: alu_op1 = imm_u_sext;
+    OP1_IMZ: alu_op1 = imm_z;
+    default: alu_op1 = 0;
+  endcase
+end
 
-   // ALU
-   val alu_out   = UInt(width = conf.xprlen)
-   
-   val alu_shamt = alu_op2(4,0).toUInt
-   
-   alu_out := MuxCase(UInt(0), Array(
-                  (io.ctl.alu_fun === ALU_ADD)  -> (alu_op1 + alu_op2).toUInt,
-                  (io.ctl.alu_fun === ALU_SUB)  -> (alu_op1 - alu_op2).toUInt,
-                  (io.ctl.alu_fun === ALU_AND)  -> (alu_op1 & alu_op2).toUInt,
-                  (io.ctl.alu_fun === ALU_OR)   -> (alu_op1 | alu_op2).toUInt,
-                  (io.ctl.alu_fun === ALU_XOR)  -> (alu_op1 ^ alu_op2).toUInt,
-                  (io.ctl.alu_fun === ALU_SLT)  -> (alu_op1.toSInt < alu_op2.toSInt).toUInt,
-                  (io.ctl.alu_fun === ALU_SLTU) -> (alu_op1 < alu_op2).toUInt,
-                  (io.ctl.alu_fun === ALU_SLL)  -> ((alu_op1 << alu_shamt)(conf.xprlen-1, 0)).toUInt,
-                  (io.ctl.alu_fun === ALU_SRA)  -> (alu_op1.toSInt >> alu_shamt).toUInt,
-                  (io.ctl.alu_fun === ALU_SRL)  -> (alu_op1 >> alu_shamt).toUInt,
-                  (io.ctl.alu_fun === ALU_COPY1)-> alu_op1
-                  ))
+always_comb begin
+  case (io.ctl.op2_sel)
+    OP2_RS2: alu_op2 = rs2_data;
+    OP2_PC : alu_op2 = pc_reg;
+    OP2_IMI: alu_op2 = imm_i_sext;
+    OP2_IMS: alu_op2 = imm_s_sext;
+    default: alu_op1 = 0;
+  endcase
+end
 
-   // Branch/Jump Target Calculation
-   br_target       := pc_reg + imm_b_sext
-   jmp_target      := pc_reg + imm_j_sext
-   jump_reg_target := (rs1_data.toUInt + imm_i_sext.toUInt)
+// ALU
+logic [32-1:0] alu_out;
+   
+logic [4:0] alu_shamt;
+assign alu_shamt = alu_op2[4:0];
+   
+always_comb begin
+  case (io.ctl.alu_fun)
+    ALU_ADD  : alu_out =         alu_op1   +         alu_op2;
+    ALU_SUB  : alu_out =         alu_op1   -         alu_op2;
+    ALU_AND  : alu_out =         alu_op1   &         alu_op2;
+    ALU_OR   : alu_out =         alu_op1   |         alu_op2;
+    ALU_XOR  : alu_out =         alu_op1   ^         alu_op2;
+    ALU_SLT  : alu_out = $signed(alu_op1)  < $signed(alu_op2);
+    ALU_SLTU : alu_out =         alu_op1   <         alu_op2;
+    ALU_SLL  : alu_out =         alu_op1  <<< alu_shamt;
+    ALU_SRA  : alu_out = $signed(alu_op1) >>> alu_shamt;
+    ALU_SRL  : alu_out =         alu_op1  >>> alu_shamt;
+    ALU_COPY1: alu_out =         alu_op1;
+    default  : alu_out = 0;
+  endcase
+end
+
+// Branch/Jump Target Calculation
+assign br_target       = pc_reg + imm_b_sext;
+assign jmp_target      = pc_reg + imm_j_sext;
+assign jump_reg_target = rs1_datat + imm_i_sext;
                                   
-   // Control Status Registers
+// Control Status Registers
    val csr = Module(new CSRFile())
    val csr_cmd = io.ctl.csr_cmd
    csr.io.host <> io.host
@@ -163,13 +159,16 @@ integer exception_target;
    // Add your own uarch counters here!
    csr.io.uarch_counters.foreach(_ := Bool(false))
 
-   // WB Mux
-   wb_data := MuxCase(alu_out, Array(
-                  (io.ctl.wb_sel === WB_ALU) -> alu_out,
-                  (io.ctl.wb_sel === WB_MEM) -> io.dmem.resp.bits.data, 
-                  (io.ctl.wb_sel === WB_PC4) -> pc_plus4,
-                  (io.ctl.wb_sel === WB_CSR) -> csr_out
-                  )).toSInt()
+// WB Mux
+always_comb begin
+  case (io.ctl.wb_sel)
+    WB_ALU : wb_data = alu_out,
+    WB_MEM : wb_data = io.dmem.resp.bits.data, 
+    WB_PC4 : wb_data = pc_plus4,
+    WB_CSR : wb_data = csr_out
+    default: wb_data = alu_out;
+  endcase
+end
                                   
 // datapath to controlpath outputs
 assign dat.inst   = inst;

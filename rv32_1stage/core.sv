@@ -14,37 +14,42 @@
 // The goal of the 1-stage is to provide the simpliest, easiest-to-read code to
 // demonstrate the RISC-V ISA.
  
-package Sodor
-{
-
-import Chisel._
-import Node._
-import Common._
-
 module core (
-(implicit conf: SodorConfiguration)
-  HTIFIO()               host,
-  MemPortIo(conf.xprlen) imem,
-  MemPortIo(conf.xprlen) dmem
+  // system signals
+  logic  input clk,
+  logic  input rst,
+  // interfaces
+  HTIFIO    host,
+  MemPortIo imem,
+  MemPortIo dmem
 );
 
-class Core(resetSignal: Bool = null)(implicit conf: SodorConfiguration) extends Module(_reset = resetSignal)
-{
-  
-  val io = new CoreIo()
-  val c  = Module(new CtlPath())
-  val d  = Module(new DatPath())
-  
-  c.io.ctl  <> d.io.ctl
-  c.io.dat  <> d.io.dat
-  c.io.resetSignal := resetSignal
-  
-  c.io.imem <> io.imem
-  d.io.imem <> io.imem
-  
-  c.io.dmem <> io.dmem
-  d.io.dmem <> io.dmem
-  
-  d.io.host <> io.host
+DatToCtlIo dat ();
+CtlToDatIo ctl ();
+
+cpath cpath (
+  // system signals
+  .clk (clk),  // clock
+  .rst (rst),  // reset
+  // interfaces
+  .imem (imem),
+  .dmem (dmem),
+  .dat (dat),
+  .ctl (ctl),
+  // ?
+  .resetSignal (0)
+);
+
+dpath dpath (
+  // system signals
+  .clk (clk),  // clock
+  .rst (rst),  // reset
+  // interfaces
+  .host (host),
+  .imem (imem),
+  .dmem (dmem),
+  .dat (dat),
+  .ctl (ctl)
+);
 
 endmodule: core

@@ -1,5 +1,34 @@
 package consts;
 
+parameter START_ADDR = 32'h00002000;
+
+// abstract out instruction decode magic numbers
+parameter RD_MSB  = 11;
+parameter RD_LSB  =  7;
+parameter RS1_MSB = 19;
+parameter RS1_LSB = 15;
+parameter RS2_MSB = 24;
+parameter RS2_LSB = 20;
+
+parameter CSR_ADDR_MSB = 31;
+parameter CSR_ADDR_LSB = 20;
+
+// location of the fifth bit in the shamt (for checking for illegal ops for SRAIW,etc.)
+parameter SHAMT_5_BIT = 25;
+parameter LONGEST_IMM_SZ = 20;
+parameter X0 = 0;
+ 
+// The Bubble Instruction (Machine generated NOP)
+// Insert (XOR x0,x0,x0) which is different from software compiler 
+// generated NOPs which are (ADDI x0, x0, 0).
+// Reasoning for this is to let visualizers and stat-trackers differentiate
+// between software NOPs and machine-generated Bubbles in the pipeline.
+parameter BUBBLE  = 32'h00004033;
+
+// Extra Exception Causes (check instructions.scala)
+parameter EXC_CAUSE_SZ = 5;
+parameter EXC_RETURN = 5'd31;
+
 // Control Signals 
 typedef enum logic [1-1:0] {
   Y      = 1'b1,
@@ -122,11 +151,11 @@ typedef enum logic [1-1:0] {
 
 // control status register access
 typedef enum logic [1-1:0] {
-  CSR_X = 2d'x,
-  CSR_N = 2d'0,
-  CSR_W = 2d'1,
-  CSR_S = 2d'2,
-  CSR_C = 2d'3
+  CSR_X = 2'dx,
+  CSR_N = 2'd0,
+  CSR_W = 2'd1,
+  CSR_S = 2'd2,
+  CSR_C = 2'd3
 } t_csr;
 
 endpackage: consts
