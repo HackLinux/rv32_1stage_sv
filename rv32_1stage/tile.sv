@@ -5,12 +5,12 @@
 
 module tile (
   // system signals
-  logic  input clk,
-  logic  input rst,
+  input  logic clk,
+  input  logic rst
   // interfaces
-  HTIFIO host
 );
 
+HTIFIO    host ();
 MemPortIo imem ();
 MemPortIo dmem ();
 
@@ -24,13 +24,12 @@ core core (
   .dmem (dmem)
 );
 
-mamory memory (
+memory memory (
   // system signals
   .clk (clk),
-  .rst (rst),
   // interfaces
   .imem (imem),
   .dmem (dmem)
 );
 
-endpackage: tile
+endmodule: tile

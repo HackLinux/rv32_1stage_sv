@@ -9,11 +9,13 @@ rm -f  rp1_tb_verilator.vcd
 #verilator -Wall --cc --trace --exe tbn/rp1_tb_verilator.cpp --top-module rp1_tb_verilator \
 #-Wno-fatal \
 
-verilator --lint-only \
+verilator --lint-only --top-module tile \
 rv32_1stage/instructions.sv \
 rv32_1stage/consts.sv \
 rv32_1stage/interfaces.sv \
-rv32_1stage/memory.sv
+rv32_1stage/memory.sv \
+rv32_1stage/tile.sv \
+rv32_1stage/core.sv
 
 ## build C++ project
 #make -j -C obj_dir/ -f Vrp1_tb_verilator.mk Vrp1_tb_verilator

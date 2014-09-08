@@ -16,8 +16,8 @@
  
 module core (
   // system signals
-  logic  input clk,
-  logic  input rst,
+  input  logic clk,
+  input  logic rst,
   // interfaces
   HTIFIO    host,
   MemPortIo imem,
@@ -27,29 +27,29 @@ module core (
 DatToCtlIo dat ();
 CtlToDatIo ctl ();
 
-cpath cpath (
-  // system signals
-  .clk (clk),  // clock
-  .rst (rst),  // reset
-  // interfaces
-  .imem (imem),
-  .dmem (dmem),
-  .dat (dat),
-  .ctl (ctl),
-  // ?
-  .resetSignal (0)
-);
-
-dpath dpath (
-  // system signals
-  .clk (clk),  // clock
-  .rst (rst),  // reset
-  // interfaces
-  .host (host),
-  .imem (imem),
-  .dmem (dmem),
-  .dat (dat),
-  .ctl (ctl)
-);
+//cpath cpath (
+//  // system signals
+//  .clk (clk),  // clock
+//  .rst (rst),  // reset
+//  // interfaces
+//  .imem (imem),
+//  .dmem (dmem),
+//  .dat (dat),
+//  .ctl (ctl),
+//  // ?
+//  .resetSignal (0)
+//);
+//
+//dpath dpath (
+//  // system signals
+//  .clk (clk),  // clock
+//  .rst (rst),  // reset
+//  // interfaces
+//  .host (host),
+//  .imem (imem),
+//  .dmem (dmem),
+//  .dat (dat),
+//  .ctl (ctl)
+//);
 
 endmodule: core

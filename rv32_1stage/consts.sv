@@ -150,7 +150,7 @@ typedef enum logic [1-1:0] {
 } t_m;
 
 // control status register access
-typedef enum logic [1-1:0] {
+typedef enum logic [2-1:0] {
   CSR_X = 2'dx,
   CSR_N = 2'd0,
   CSR_W = 2'd1,

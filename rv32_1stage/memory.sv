@@ -14,7 +14,7 @@
 // Optionally uses synchronous read (default is async). For example, a 1-stage
 // processor can only ever work using asynchronous memory!
 
-module ScratchPadMemory #(
+module memory #(
   int unsigned AW = 32,
   int unsigned DW = 32,
   int unsigned SW = DW/8,
@@ -26,6 +26,8 @@ module ScratchPadMemory #(
   MemPortIo imem,
   MemPortIo dmem
 );
+
+import consts::*;
 
 logic [SW-1:0] [8-1:0] mem [0:MS/SW-1];
 
