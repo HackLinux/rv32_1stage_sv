@@ -27,29 +27,29 @@ module core (
 DatToCtlIo dat ();
 CtlToDatIo ctl ();
 
-//cpath cpath (
-//  // system signals
-//  .clk (clk),  // clock
-//  .rst (rst),  // reset
-//  // interfaces
-//  .imem (imem),
-//  .dmem (dmem),
-//  .dat (dat),
-//  .ctl (ctl),
-//  // ?
-//  .resetSignal (0)
-//);
-//
-//dpath dpath (
-//  // system signals
-//  .clk (clk),  // clock
-//  .rst (rst),  // reset
-//  // interfaces
-//  .host (host),
-//  .imem (imem),
-//  .dmem (dmem),
-//  .dat (dat),
-//  .ctl (ctl)
-//);
+cpath cpath (
+  // system signals
+  .clk (clk),  // clock
+  .rst (rst),  // reset
+  // interfaces
+  .imem (imem),
+  .dmem (dmem),
+  .dat (dat),
+  .ctl (ctl),
+  // ?
+  .resetSignal (0)
+);
+
+dpath dpath (
+  // system signals
+  .clk (clk),  // clock
+  .rst (rst),  // reset
+  // interfaces
+  .host (host),
+  .imem (imem),
+  .dmem (dmem),
+  .dat (dat),
+  .ctl (ctl)
+);
 
 endmodule: core

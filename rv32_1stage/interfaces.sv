@@ -31,13 +31,16 @@ endinterface
 //}
 
 interface MemReq ();
+  logic          valid;
+  logic          ready;
   logic [32-1:0] addr;
   logic [32-1:0] data;
-  logic [1-1:0] fcn;  // memory function code
-  logic [3-1:0] typ;  // memory type
+  logic  [1-1:0] fcn;  // memory function code
+  logic  [3-1:0] typ;  // memory type
 endinterface
 
 interface MemResp ();
+  logic          valid;
   logic [32-1:0] data;
 endinterface
 
@@ -47,13 +50,28 @@ interface MemPortIo ();
   MemResp resp;
 endinterface
 
+typedef struct packed {
+  logic [8-1:0] ip  ;
+  logic [8-1:0] im  ;
+  logic [7-1:0] zero;
+  logic         er  ;
+  logic         vm  ;
+  logic         s64 ;
+  logic         u64 ;
+  logic         ef  ;
+  logic         pei ;
+  logic         ei  ;
+  logic         ps  ;
+  logic         s   ;
+} Status;
+
 interface CtlToDatIo ();
   logic         stall         ;
   logic [3-1:0] pc_sel        ;
   logic [2-1:0] op1_sel       ;
   logic [2-1:0] op2_sel       ;
   logic [4-1:0] alu_fun       ;
-  logic [3-1:0] wb_sel        ;
+  logic [2-1:0] wb_sel        ;
   logic         rf_wen        ;
   logic [2-1:0] csr_cmd       ;
   logic         exception     ;

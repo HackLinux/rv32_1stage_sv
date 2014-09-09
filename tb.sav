@@ -1,0 +1,54 @@
+[*]
+[*] GTKWave Analyzer v3.3.58 (w)1999-2014 BSI
+[*] Tue Sep  9 18:48:24 2014
+[*]
+[dumpfile] "/home/izi/Workplace/RISC-V/tb.vcd"
+[dumpfile_mtime] "Tue Sep  9 18:45:56 2014"
+[dumpfile_size] 185584
+[savefile] "/home/izi/Workplace/RISC-V/tb.sav"
+[timestart] 0
+[size] 1855 1176
+[pos] -1 -1
+*-7.212283 40 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb.
+[sst_width] 223
+[signals_width] 190
+[sst_expanded] 1
+[sst_vpaned_height] 362
+@28
+tb.clk
+tb.rst
+@800200
+-imem
+@22
+tb.imem_req_addr[31:0]
+tb.imem_req_data[31:0]
+@28
+tb.imem_req_fcn
+tb.imem_req_ready
+tb.imem_req_typ[2:0]
+tb.imem_req_valid
+@22
+tb.imem_resp_data[31:0]
+@28
+tb.imem_resp_valid
+@1000200
+-imem
+@800201
+-dmem
+@23
+tb.dmem_req_addr[31:0]
+tb.dmem_req_data[31:0]
+@29
+tb.dmem_req_fcn
+tb.dmem_req_ready
+tb.dmem_req_typ[2:0]
+tb.dmem_req_valid
+@23
+tb.dmem_resp_data[31:0]
+@29
+tb.dmem_resp_valid
+@1000201
+-dmem
+[pattern_trace] 1
+[pattern_trace] 0

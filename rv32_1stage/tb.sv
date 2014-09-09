@@ -1,9 +1,4 @@
-//**************************************************************************
-// RISCV Processor Tile
-//--------------------------------------------------------------------------
-//
-
-module tile (
+module tb (
   // system signals
   input  logic clk,
   input  logic rst
@@ -81,4 +76,4 @@ memory memory (
   .dmem (dmem)
 );
 
-endmodule: tile
+endmodule: tb

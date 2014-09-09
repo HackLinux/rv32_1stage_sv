@@ -10,16 +10,15 @@ module dpath (
   input  logic clk, // clock
   input  logic rst, // reset
   // interfaces
-  HTIFIO    host
+  HTIFIO    host,
   MemPortIo imem,
   MemPortIo dmem,
   CtlToDatIo ctl,
   DatToCtlIo dat
 );
 
-import Constants._
-import Common._
-import Common.Constants._
+import instructions::*;
+import consts::*;
 
 // Instruction Fetch
 logic [32-1:0] pc_next         ;
@@ -32,9 +31,9 @@ logic [32-1:0] exception_target;
 // PC Register
 logic [32-1:0] pc_reg;
 
-always_ff (posedge clk, posedge rst)
+always_ff @ (posedge clk, posedge rst)
 if (rst)               pc_reg <= START_ADDR;
-else if (!ctl__stall)  pc_reg <= pc_next
+else if (!ctl__stall)  pc_reg <= pc_next;
 
 assign pc_plus4 = pc_reg + 4;               
 
@@ -46,13 +45,14 @@ always_comb begin
     PC_JR  : pc_next = jump_reg_target;
     PC_EXC : pc_next = exception_target;
     default: pc_next = pc_plus4;
+  endcase
 end
    
-   io.imem.req.bits.addr := pc_reg
-   val inst = Mux(io.imem.resp.valid, io.imem.resp.bits.data, BUBBLE) 
-                 
-   
-   // Decode
+assign imem.req.addr = pc_reg;
+logic [32-1:0] inst;
+assign inst = imem.resp.valid ? imem.resp.data : BUBBLE;
+
+// Decode
 logic [5-1:0] rs1_addr;
 logic [5-1:0] rs2_addr;
 logic [5-1:0] wb_addr ;
@@ -65,7 +65,7 @@ logic [32-1:0] wb_data;
 // Register File
 logic [32-1:0] regfile [0:32-1];
 
-always_ff (posedge clk)
+always_ff @ (posedge clk)
 if (ctl__rf_wen && |wb_addr)
 regfile[wb_addr] <= wb_data;
 
@@ -74,22 +74,32 @@ logic [32-1:0] rs2_data;
 assign rs1_data = |rs1_addr ? regfile[rs1_addr] : 32'd0;
 assign rs2_data = |rs2_addr ? regfile[rs2_addr] : 32'd0;
    
-   // immediates
-   val imm_i =     inst(31, 20) 
-   val imm_s = Cat(inst(31, 25), inst(11,7))
-   val imm_b = Cat(inst(31), inst(7), inst(30,25), inst(11,8))
-   val imm_u =     inst(31, 12)
-   val imm_j = Cat(inst(31), inst(19,12), inst(20), inst(30,21))
-   val imm_z = Cat(Fill(UInt(0), 27), inst(19,15))
+// immediates
+logic [32-1:0] imm_i;
+logic [32-1:0] imm_s;
+logic [32-1:0] imm_b;
+logic [32-1:0] imm_u;
+logic [32-1:0] imm_j;
+logic [32-1:0] imm_z;
+assign imm_i =  inst[31:20];
+assign imm_s = {inst[31:25], inst[11: 7]};
+assign imm_b = {inst[31], inst[7], inst[30:25], inst[11:8]};
+assign imm_u =  inst[31:12];
+assign imm_j = {inst[31], inst[19:12], inst[20], inst[30:21]};
+assign imm_z = {27'd0, inst[19:15]};
 
    // sign-extend immediates
-   val imm_i_sext = Cat(Fill(imm_i(11), 20), imm_i)
-   val imm_s_sext = Cat(Fill(imm_s(11), 20), imm_s)
-   val imm_b_sext = Cat(Fill(imm_b(11), 19), imm_b, UInt(0))
-   val imm_u_sext = Cat(imm_u, Fill(UInt(0), 12))
-   val imm_j_sext = Cat(Fill(imm_j(19), 11), imm_j, UInt(0))
-   
-   
+logic signed [32-1:0] imm_i_sext;
+logic signed [32-1:0] imm_s_sext;
+logic signed [32-1:0] imm_b_sext;
+logic signed [32-1:0] imm_u_sext;
+logic signed [32-1:0] imm_j_sext;
+assign imm_i_sext = { {20{imm_i[11]}}, imm_i };
+assign imm_s_sext = { {20{imm_s[11]}}, imm_s };
+assign imm_b_sext = { {19{imm_b[11]}}, imm_b, 1'b0 };
+assign imm_u_sext = { imm_u, 12'h0 };
+assign imm_j_sext = { {11{imm_j[19]}}, imm_j, 1'b0 };
+
 always_comb begin
   case (io.ctl.op1_sel)
     OP1_RS1: alu_op1 = rs1_data;
@@ -180,10 +190,10 @@ assign dat.br_ltu = (rs1_data.toUInt < rs2_data.toUInt);
 assign dmem.req.bits.addr = alu_out;
 assign dmem.req.bits.data = rs2_data;
    
-   // Printout
-   val tsc_reg = Reg(init=UInt(0,32))
-   tsc_reg := tsc_reg + UInt(1)
-
+//   // Printout
+//   val tsc_reg = Reg(init=UInt(0,32))
+//   tsc_reg := tsc_reg + UInt(1)
+//
 //   printf("Cyc= %d PC= 0x%x %s %s%s Op1=[0x%x] Op2=[0x%x] W[%s,%d= 0x%x] %s Mem[%s %d: 0x%x]\n"
 //      , tsc_reg(31,0)
 //      , pc_reg

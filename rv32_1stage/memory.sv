@@ -27,8 +27,6 @@ module memory #(
   MemPortIo dmem
 );
 
-import consts::*;
-
 logic [SW-1:0] [8-1:0] mem [0:MS/SW-1];
 
 // read access
@@ -37,7 +35,7 @@ assign dmem.resp.data = dmem.req.addr >> 2;
 
 // write access
 always_ff @ (posedge clk)
-if (dmem.req.fcn == M_XWR) begin
+if (dmem.req.fcn) begin
   for (int i=0; i<SW; i++) begin
     // TODO
     if (i<=dmem.req.typ) mem [dmem.req.addr >> 2] [i] <= dmem.req.data[i*8+:8];

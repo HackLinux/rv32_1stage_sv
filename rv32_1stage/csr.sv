@@ -8,21 +8,6 @@ import scala.math._
 
 // TODO: add timeh, cycleh, counth, instreh counters for the full RV32I experience.
 
-typedef struct packed {
-  logic [8-1:0] ip  ;
-  logic [8-1:0] im  ;
-  logic [7-1:0] zero;
-  logic         er  ;
-  logic         vm  ;
-  logic         s64 ;
-  logic         u64 ;
-  logic         ef  ;
-  logic         pei ;
-  logic         ei  ;
-  logic         ps  ;
-  logic         s   ;
-} Status;
-
 object CSR
 {
   // commands
@@ -59,36 +44,72 @@ class CSRFile(implicit conf: SodorConfiguration) extends Module
       val replay = Bool(OUTPUT)
       val time = UInt(OUTPUT, conf.xprlen)
    }
+
+interface rw ();
+  input  logic [12-1:0] addr ;
+  input  logic  [2-1:0] cmd  ;
+  output logic [32-1:0] rdata;
+  input  logic [32-1:0] wdata;
+endinterface
+
+module csrfile #(
+  int unsigned VB = VADDR_BITS,
+  int unsigned PB = PADDR_BITS
+)(
+  // system signals
+  input  logic clk, // clock
+  input  logic rst, // reset
+  // interfaces
+  HTIFIO    host,
+  rw        rw,
+  // signals
+  output Status         status        ,
+  output logic [PB-1:0] ptbr          ,
+  output logic [VB  :0] evec          ,
+  input  logic          exception     ,
+  input  logic          retire        ,
+  input  logic [16-1:0] uarch_counters,
+  input  logic [32-1:0] cause         ,
+  input  logic          badvaddr_wen  ,
+  input  logic [VB  :0] pc            ,
+  input  logic          sret          ,
+  output logic          fatc          ,
+  output logic          replay        ,
+  output logic [32-1:0] time          
+);
  
-  val reg_epc = Reg(Bits(width = VADDR_BITS+1))
-  val reg_badvaddr = Reg(Bits(width = VADDR_BITS))
-  val reg_evec = Reg(Bits(width = VADDR_BITS))
-  val reg_compare = Reg(Bits(width = 32))
-  val reg_cause = Reg(Bits(width = conf.xprlen))
-  val reg_tohost = Reg(init=Bits(0, conf.xprlen))
-  val reg_fromhost = Reg(init=Bits(0, conf.xprlen))
-  val reg_sup0 = Reg(Bits(width = conf.xprlen))
-  val reg_sup1 = Reg(Bits(width = conf.xprlen))
-  val reg_ptbr = Reg(UInt(width = PADDR_BITS))
-  val reg_stats = Reg(init=Bool(false))
-  val reg_status = Reg(new Status) // reset down below
-  val reg_time = WideCounter(conf.xprlen)
-  val reg_instret = WideCounter(conf.xprlen, io.retire)
-  val reg_uarch_counters = io.uarch_counters.map(WideCounter(conf.xprlen, _))
-  val reg_fflags = Reg(UInt(width = 5))
-  val reg_frm = Reg(UInt(width = 3))
+logic [VB  :0] reg_epc            ;
+logic [VB-1:0] reg_badvaddr       ;
+logic [VB-1:0] reg_evec           ;
+logic [32-1:0] reg_compare        ;
+logic [32-1:0] reg_cause          ;
+logic [32-1:0] reg_tohost         = Reg(init=Bits(0, conf.xprlen))
+logic [32-1:0] reg_fromhost       = Reg(init=Bits(0, conf.xprlen))
+logic [32-1:0] reg_sup0           ;
+logic [32-1:0] reg_sup1           ;
+logic [PB-1:0] reg_ptbr           ;
+logic          reg_stats          = Reg(init=Bool(false))
+Status         reg_status         ; // reset down below
+logic [-1:0] reg_time           = WideCounter(conf.xprlen)
+logic [-1:0] reg_instret        = WideCounter(conf.xprlen, io.retire)
+logic [-1:0] reg_uarch_counters = io.uarch_counters.map(WideCounter(conf.xprlen, _))
+logic  [5-1:0] reg_fflags       ;
+logic  [3-1:0] reg_frm          ;
 
-  val r_irq_timer = Reg(init=Bool(false))
-  val r_irq_ipi = Reg(init=Bool(true))
+logic r_irq_timer;
+logic r_irq_ipi;
 
-  val cpu_req_valid = io.rw.cmd != CSR.N
+logic cpu_req_valid;
+assign cpu_req_valid      = rw.cmd != CSR_N
   val host_csr_req_valid = Reg(Bool()) // don't reset
-  val host_csr_req_fire = host_csr_req_valid && !cpu_req_valid
+logic host_csr_req_fire;
+assign host_csr_req_fire  = host_csr_req_valid && !cpu_req_valid;
   val host_csr_rep_valid = Reg(Bool()) // don't reset
-  val host_csr_bits = Reg(io.host.csr_req.bits)
-  io.host.csr_req.ready := !host_csr_req_valid && !host_csr_rep_valid
-  io.host.csr_rep.valid := host_csr_rep_valid
-  io.host.csr_rep.bits := host_csr_bits.data
+  val host_csr_bits      = Reg(io.host.csr_req.bits)
+assign host.csr_req.ready = !host_csr_req_valid && !host_csr_rep_valid;
+assign host.csr_rep.valid = host_csr_rep_valid;
+assign host.csr_rep.bits  = host_csr_bits.data;
+
   when (io.host.csr_req.fire()) {
     host_csr_req_valid := true
     host_csr_bits := io.host.csr_req.bits
@@ -102,7 +123,8 @@ class CSRFile(implicit conf: SodorConfiguration) extends Module
   
   io.host.debug_stats_csr := reg_stats // direct export up the hierarchy
 
-  val addr = Mux(cpu_req_valid, io.rw.addr, host_csr_bits.addr | 0x500)
+logic [12-1:0] addr;
+assign addr = cpu_req_valid ? io.rw.addr : host_csr_bits.addr | 0x500;
   val decoded_addr = {
     val default = List(Bits("b" + ("?"*CSRs.all.size), CSRs.all.size))
     val outs = for (i <- 0 until CSRs.all.size)
@@ -115,15 +137,18 @@ class CSRFile(implicit conf: SodorConfiguration) extends Module
     a
   }
 
-  val wen = cpu_req_valid || host_csr_req_fire && host_csr_bits.rw
-  val wdata = Mux(cpu_req_valid, io.rw.wdata, host_csr_bits.data)
+logic          wen;
+logic [32-1:0] wdata;
+assign wen = cpu_req_valid || host_csr_req_fire && host_csr_bits.rw;
+assign wdata = cpu_req_valid ? rw.wdata : host_csr_bits.data;
 
-  io.status := reg_status
-  io.status.ip := Cat(r_irq_timer, reg_fromhost.orR, r_irq_ipi,   Bool(false),
-                      Bool(false), Bool(false),      Bool(false), Bool(false))
-  io.fatc := wen && decoded_addr(CSRs.fatc)
-  io.evec := Mux(io.exception, reg_evec.toSInt, reg_epc).toUInt
-  io.ptbr := reg_ptbr
+always_comb begin
+  status    = reg_status;
+  status.ip = {r_irq_timer, reg_fromhost.orR, r_irq_ipi, 5'd0};
+end
+assign fatc = wen && decoded_addr(CSRs.fatc)
+assign evec = exception ? reg_evec : reg_epc;
+assign ptbr = reg_ptbr;
 
   when (io.badvaddr_wen) {
     val wdata = io.rw.wdata
@@ -146,10 +171,6 @@ class CSRFile(implicit conf: SodorConfiguration) extends Module
     reg_status.ei := reg_status.pei
   }
   
-  when (reg_time(reg_compare.getWidth-1,0) === reg_compare) {
-    r_irq_timer := true
-  }
-
   io.time := reg_time
   io.host.ipi_req.valid := cpu_req_valid && decoded_addr(CSRs.send_ipi)
   io.host.ipi_req.bits := io.rw.wdata
@@ -161,30 +182,30 @@ class CSRFile(implicit conf: SodorConfiguration) extends Module
   val read_ptbr = reg_ptbr(PADDR_BITS-1,PGIDX_BITS) << PGIDX_BITS
 
   val read_mapping = collection.mutable.LinkedHashMap[Int,Bits](
-    CSRs.fflags -> (UInt(0)),
-    CSRs.frm -> (UInt(0)),
-    CSRs.fcsr -> (UInt(0)),
-    CSRs.cycle -> reg_time,
-    CSRs.time -> reg_time,
-    CSRs.instret -> reg_instret,
-    CSRs.sup0 -> reg_sup0,
-    CSRs.sup1 -> reg_sup1,
-    CSRs.epc -> reg_epc,
+    CSRs.fflags   -> (UInt(0)),
+    CSRs.frm      -> (UInt(0)),
+    CSRs.fcsr     -> (UInt(0)),
+    CSRs.cycle    -> reg_time,
+    CSRs.time     -> reg_time,
+    CSRs.instret  -> reg_instret,
+    CSRs.sup0     -> reg_sup0,
+    CSRs.sup1     -> reg_sup1,
+    CSRs.epc      -> reg_epc,
     CSRs.badvaddr -> reg_badvaddr,
-    CSRs.ptbr -> read_ptbr,
-    CSRs.asid -> UInt(0),
-    CSRs.count -> reg_time,
-    CSRs.compare -> reg_compare,
-    CSRs.evec -> reg_evec,
-    CSRs.cause -> reg_cause,
-    CSRs.status -> io.status.toBits,
-    CSRs.hartid -> io.host.id,
-    CSRs.impl -> read_impl,
-    CSRs.fatc -> read_impl, // don't care
+    CSRs.ptbr     -> read_ptbr,
+    CSRs.asid     -> UInt(0),
+    CSRs.count    -> reg_time,
+    CSRs.compare  -> reg_compare,
+    CSRs.evec     -> reg_evec,
+    CSRs.cause    -> reg_cause,
+    CSRs.status   -> io.status.toBits,
+    CSRs.hartid   -> io.host.id,
+    CSRs.impl     -> read_impl,
+    CSRs.fatc     -> read_impl, // don't care
     CSRs.send_ipi -> read_impl, // don't care
-    CSRs.clear_ipi -> read_impl, // don't care
-    CSRs.stats -> reg_stats,
-    CSRs.tohost -> reg_tohost,
+    CSRs.clear_ipi-> read_impl, // don't care
+    CSRs.stats    -> reg_stats,
+    CSRs.tohost   -> reg_tohost,
     CSRs.fromhost -> reg_fromhost)
   
    for (i <- 0 until reg_uarch_counters.size)
@@ -192,47 +213,52 @@ class CSRFile(implicit conf: SodorConfiguration) extends Module
 
   io.rw.rdata := Mux1H(for ((k, v) <- read_mapping) yield decoded_addr(k) -> v)
 
-  when (wen) {
-    when (decoded_addr(CSRs.status)) {
-      reg_status := new Status().fromBits(wdata)
-      reg_status.s64 := true
-      reg_status.u64 := true
-      reg_status.zero := 0
-      reg_status.vm := false
-      reg_status.er := false
-      reg_status.ef := false
-    }
-    when (decoded_addr(CSRs.fflags))   { reg_fflags := wdata }
-    when (decoded_addr(CSRs.frm))      { reg_frm := wdata }
-    when (decoded_addr(CSRs.fcsr))     { reg_fflags := wdata; reg_frm := wdata >> reg_fflags.getWidth }
-    when (decoded_addr(CSRs.epc))      { reg_epc := wdata(VADDR_BITS,0).toSInt }
-    when (decoded_addr(CSRs.evec))     { reg_evec := wdata(VADDR_BITS-1,0).toSInt }
-    when (decoded_addr(CSRs.count))    { reg_time := wdata.toUInt }
-    when (decoded_addr(CSRs.compare))  { reg_compare := wdata(31,0).toUInt; r_irq_timer := Bool(false) }
-    when (decoded_addr(CSRs.fromhost)) { when (reg_fromhost === UInt(0) || !host_csr_req_fire) { reg_fromhost := wdata } }
-    when (decoded_addr(CSRs.tohost))   { when (reg_tohost === UInt(0) || host_csr_req_fire) { reg_tohost := wdata } }
-    when (decoded_addr(CSRs.clear_ipi)){ r_irq_ipi := wdata(0) }
-    when (decoded_addr(CSRs.sup0))     { reg_sup0 := wdata }
-    when (decoded_addr(CSRs.sup1))     { reg_sup1 := wdata }
-    when (decoded_addr(CSRs.ptbr))     { reg_ptbr := Cat(wdata(PADDR_BITS-1, PGIDX_BITS), Bits(0, PGIDX_BITS)).toUInt }
-    when (decoded_addr(CSRs.stats))    { reg_stats := wdata(0) }
-  }
+always_ff @ (posedge clk, posedge rst)
+if (rst) begin
+  reg_status.ei   <= 1'b0;
+  reg_status.pei  <= 1'b0;
+  reg_status.ef   <= 1'b0;
+  reg_status.er   <= 1'b0;
+  reg_status.ps   <= 1'b0;
+  reg_status.s    <= 1'b1;
+  reg_status.u64  <= 1'b1;
+  reg_status.s64  <= 1'b1;
+  reg_status.vm   <= 1'b0;
+  reg_status.zero <= 0;
+  reg_status.im   <= 0;
+  reg_status.ip   <= 0;
 
-  io.host.ipi_rep.ready := Bool(true)
-  when (io.host.ipi_rep.valid) { r_irq_ipi := Bool(true) }
-
-  when(this.reset) {
-    reg_status.ei := false
-    reg_status.pei := false
-    reg_status.ef := false
-    reg_status.er := false
-    reg_status.ps := false
-    reg_status.s := true
-    reg_status.u64 := true
-    reg_status.s64 := true
-    reg_status.vm := false
+  r_irq_ipi       <= 1'b1;
+  
+end else if (wen) begin
+  if (decoded_addr(CSRs.status)) begin
+    reg_status      := new Status().fromBits(wdata)
+    reg_status.s64  := true
+    reg_status.u64  := true
     reg_status.zero := 0
-    reg_status.im := 0
-    reg_status.ip := 0
+    reg_status.vm   := false
+    reg_status.er   := false
+    reg_status.ef   := false
   }
-}
+  if (decoded_addr(CSRs.fflags   ))                                            reg_fflags  := wdata }
+  if (decoded_addr(CSRs.frm      ))                                            reg_frm     := wdata }
+  if (decoded_addr(CSRs.fcsr     ))                                            reg_fflags  := wdata; reg_frm := wdata >> reg_fflags.getWidth }
+  if (decoded_addr(CSRs.epc      ))                                            reg_epc     := wdata(VADDR_BITS,0).toSInt }
+  if (decoded_addr(CSRs.evec     ))                                            reg_evec    := wdata(VADDR_BITS-1,0).toSInt }
+  if (decoded_addr(CSRs.count    ))                                            reg_time    := wdata.toUInt }
+  if (decoded_addr(CSRs.compare  ))                                            reg_compare := wdata(31,0).toUInt;
+  if (reg_time(reg_compare.getWidth-1,0) === reg_compare)                      r_irq_timer := 1'b1;
+  else if (decoded_addr(CSRs.compare  ))                                       r_irq_timer := 1'b0;
+  if (decoded_addr(CSRs.fromhost ))  if (~|reg_fromhost || !host_csr_req_fire) reg_fromhost <= wdata;
+  if (decoded_addr(CSRs.tohost   ))  if (~|reg_tohost   ||  host_csr_req_fire) reg_tohost   <= wdata;
+  if (decoded_addr(CSRs.clear_ipi))                                            r_irq_ipi   <= wdata[0];
+  else if (host.ipi_rep.valid)                                                 r_irq_ipi   <= 1'b1;
+  if (decoded_addr(CSRs.sup0     ))                                            reg_sup0    := wdata }
+  if (decoded_addr(CSRs.sup1     ))                                            reg_sup1    := wdata }
+  if (decoded_addr(CSRs.ptbr     ))                                            reg_ptbr    := Cat(wdata(PADDR_BITS-1, PGIDX_BITS), Bits(0, PGIDX_BITS)).toUInt }
+  if (decoded_addr(CSRs.stats    ))                                            reg_stats   := wdata(0) }
+end
+
+assign host.ipi_rep.ready = 1'b1;
+
+endmodule: csr
