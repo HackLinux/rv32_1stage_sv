@@ -2,26 +2,33 @@
 
 # cleanup
 rm -rf obj_dir
-rm -f  rp1_tb_verilator.vcd
+rm -f  tb.vcd
 
 # run Verilator to translate Verilog into C++, include C++ testbench
 # TODO remove -Wno-fatal so warnings are not ignored
-#verilator -Wall --cc --trace --exe tbn/rp1_tb_verilator.cpp --top-module rp1_tb_verilator \
-#-Wno-fatal \
-
-verilator --lint-only --top-module tile \
-rv32_1stage/instructions.sv \
-rv32_1stage/consts.sv \
+verilator -Wall --cc --trace --exe tbn/tb.cpp --top-module tb \
+-DSYNTHESIS \
+-Wno-fatal \
+--debug --gdbbt \
 rv32_1stage/interfaces.sv \
+rv32_1stage/Top.v \
 rv32_1stage/memory.sv \
-rv32_1stage/tile.sv \
-rv32_1stage/core.sv
+rv32_1stage/tb_verilator.sv
 
-## build C++ project
-#make -j -C obj_dir/ -f Vrp1_tb_verilator.mk Vrp1_tb_verilator
-## run executable simulation
-##obj_dir/Vrp1_tb_verilator
-#/lib64/ld-linux-x86-64.so.2 obj_dir/Vrp1_tb_verilator
-#
-## view waveforms
-##gtkwave rp1_tb_verilator.vcd rp1_tb_verilator.sav &
+#verilator --lint-only --top-module tile \
+#rv32_1stage/instructions.sv \
+#rv32_1stage/consts.sv \
+#rv32_1stage/interfaces.sv \
+#rv32_1stage/memory.sv \
+#rv32_1stage/tile.sv \
+#rv32_1stage/core.sv \
+#rv32_1stage/cpath.sv \
+#rv32_1stage/dpath.sv
+
+# build C++ project
+make -j -C obj_dir/ -f Vtb.mk Vtb
+# run executable simulation
+obj_dir/Vtb
+
+# view waveforms
+#gtkwave tb.vcd tb.sav &

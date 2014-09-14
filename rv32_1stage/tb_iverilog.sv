@@ -17,7 +17,7 @@ initial begin
   rst = 1'b1;
   repeat (4) @ (posedge clk);
   rst = 1'b0;
-  repeat (10000) @ (posedge clk);
+  repeat (100) @ (posedge clk);
   $finish();
 end
 
