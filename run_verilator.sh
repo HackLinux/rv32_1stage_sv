@@ -6,7 +6,7 @@ rm -f  tb.vcd
 
 # run Verilator to translate Verilog into C++, include C++ testbench
 # TODO remove -Wno-fatal so warnings are not ignored
-verilator -Wall --cc --trace --exe tbn/tb_verilator.cpp --top-module tb \
+verilator -Wall --cc --trace --exe rv32_1stage/tb_verilator.cpp --top-module tb \
 -DSYNTHESIS \
 -Wno-fatal \
 --debug --gdbbt \
