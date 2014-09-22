@@ -65,4 +65,4 @@ end
 
 initial $readmemh ("dhrystone.riscv.hex", mem);
 
-endmodule
+endmodule: memory
