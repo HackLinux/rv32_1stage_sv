@@ -18,7 +18,7 @@ module memory #(
   int unsigned AW = 32,
   int unsigned DW = 32,
   int unsigned SW = DW/8,
-  int unsigned MS = 1024
+  int unsigned MS = 65536
 )(
   // system signals
   input logic clk,
@@ -30,16 +30,24 @@ module memory #(
 logic [SW-1:0] [8-1:0] mem [0:MS/SW-1];
 
 // read access
-assign imem.resp.data = imem.req.addr >> 2;
-assign dmem.resp.data = dmem.req.addr >> 2;
+assign imem.resp.data = mem [imem.req.addr >> 2];
+assign dmem.resp.data = mem [dmem.req.addr >> 2];
+
+assign imem_req_ready = 1'b1;
+assign dmem_req_ready = 1'b1;
+
+assign imem_resp_valid = 1'b1;
+assign dmem_resp_valid = 1'b1;
 
 // write access
 always_ff @ (posedge clk)
-if (dmem.req.fcn) begin
+if (dmem.req.ready & dmem.req.valid & dmem.req.fcn) begin
   for (int i=0; i<SW; i++) begin
     // TODO
     if (i<=dmem.req.typ) mem [dmem.req.addr >> 2] [i] <= dmem.req.data[i*8+:8];
   end
 end
 
-endmodule
+initial $readmemh ("dhrystone.riscv.hex", mem);
+
+endmodule: memory
